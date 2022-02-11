@@ -1,0 +1,146 @@
+---
+title: "Replication of Table 1 of Green et al (2016)"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, echo = FALSE}
+library(kableExtra)
+library(formattable)
+
+root <- rprojroot::find_rstudio_root_file()
+```
+
+```{r, echo = FALSE, warning = FALSE}
+for (f in list.files(file.path(root, "modules"))) {
+  source(file.path(root, "modules", f))
+}
+for (f in list.files(file.path(root, "modules"))) {
+  source(file.path(root, "modules", f))
+}
+
+d <- read.csv(file.path(root, "analysis/results.csv"))
+conditions <- get_conditions_matrix()
+d <- cbind(conditions[d$idx_condition, ], d)
+
+max_n_factors <- get_max_n_factors(d$n_items)
+for (DV in c(9:17)) {
+  idx_cases <- which(d[, DV] == -1)
+  d[idx_cases, DV] <- max_n_factors[idx_cases]
+}
+d[["R_ru"]] <- pmin(d[["R_ru"]], d[["r_halt"]])
+
+d$n_factor <- -1
+d$n_factor[d$m_type == "a"] <- 0
+d$n_factor[d$m_type == "b"] <- 1
+d$n_factor[d$m_type == "c"] <- 1
+d$n_factor[d$m_type == "d"] <- 2
+d$n_factor[d$m_type == "e"] <- 2
+
+d <- subset(
+  d,
+  select = -c(
+    T_fm, T_fu, T_rm,
+    R_fm, R_fu, R_rm,
+    f_halt, r_halt, n_items
+  )
+)
+
+d$T_ru_hit   <- d$T_ru == d$n_factor
+d$T_ru_under <- d$T_ru <  d$n_factor
+d$T_ru_over  <- d$T_ru >  d$n_factor
+d$R_ru_hit   <- d$R_ru == d$n_factor
+d$R_ru_under <- d$R_ru <  d$n_factor
+d$R_ru_over  <- d$R_ru >  d$n_factor
+
+d <- subset(
+  d,
+  select = -c(
+    T_ru, R_ru
+  )
+)
+
+d$t_type[which(d$t_type == "uniform")] <- "Same"
+d$t_type[which(d$t_type == "mixed")]   <- "Different"
+
+# Table 1 Part 1
+dd <- subset(d, m_type == "a")
+oo <- aggregate(dd, by = list(dd$t_type, dd$n_obs), mean)
+oo <- oo[, c(
+  "Group.1", "w_lambda",
+  "T_ru_hit", "T_ru_under", "T_ru_over",
+  "R_ru_hit", "R_ru_under", "R_ru_over"
+)]
+table_data_component <- cbind(oo[1:2, ], oo[3:4, ])
+table_data_component <- table_data_component[
+  order(table_data_component[["Group.1"]], decreasing = TRUE),
+]
+table_data <- table_data_component
+
+# Table 1 Part 2
+dd <- subset(d, m_type == "b")
+oo <- aggregate(dd, by = list(dd$w_lambda, dd$t_type, dd$n_obs), mean)
+oo <- oo[, c(
+  "Group.2", "w_lambda",
+  "T_ru_hit", "T_ru_under", "T_ru_over",
+  "R_ru_hit", "R_ru_under", "R_ru_over"
+)]
+table_data_component <- cbind(oo[1:4, ], oo[5:8, ])
+table_data_component <- table_data_component[
+  order(table_data_component[["Group.2"]], decreasing = TRUE),
+]
+names(table_data_component) <- names(table_data)
+table_data <- rbind(table_data, table_data_component)
+
+# Table 1 Part 3
+dd <- subset(d, m_type == "c")
+oo <- aggregate(dd, by = list(dd$w_lambda, dd$t_type, dd$n_obs), mean)
+oo <- oo[, c(
+  "Group.2", "w_lambda",
+  "T_ru_hit", "T_ru_under", "T_ru_over",
+  "R_ru_hit", "R_ru_under", "R_ru_over"
+)]
+table_data_component <- cbind(oo[1:4, ], oo[5:8, ])
+table_data_component <- table_data_component[
+  order(table_data_component[["Group.2"]], decreasing = TRUE),
+]
+names(table_data_component) <- names(table_data)
+table_data <- rbind(table_data, table_data_component)
+
+table_data <- table_data[, -(9:10)]
+names(table_data)[1:2] <- c("Thresholds", "Lambda")
+rownames(table_data) <- NULL
+```
+
+## Table 1 {.tabset}
+
+### Replicated
+
+```{r, echo = FALSE}
+for (i in 3:14) {
+  table_data[, i] <- round(table_data[, i], 3)
+  table_data[, i] <- 
+    color_bar("lightblue", fun = function(x) {x})(table_data[, i])
+}
+colnames(table_data)[3:14] <- 1:12
+kable(table_data, digits = 1, escape = FALSE) |>
+  kable_styling() |>
+  column_spec(1:2 , width = "4em") |>
+  column_spec(3:14, width = "4em")
+```
+
+### Original
+
+```{r, echo = FALSE}
+table_data_original <- read.csv(file.path(root, "tables/table_1_original.csv"))
+for (i in 3:14) {
+  table_data_original[, i] <- 
+    color_bar("lightblue", fun = function(x) {x})(table_data_original[, i])
+}
+colnames(table_data_original)[3:14] <- 1:12
+kable(table_data_original, digits = 1, escape = FALSE) |>
+  kable_styling() |>
+  column_spec(1:2 , width = "4em") |>
+  column_spec(3:14, width = "4em")
+```
