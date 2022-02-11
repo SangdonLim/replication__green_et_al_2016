@@ -71,7 +71,12 @@ results <- foreach(
 
   # data generation ------------------------------------------------------------
 
-  X_int <- simulate_sample(n_obs, m_type, n_item, r_factor, w_lambda, t_type)
+  positive_definite <- FALSE
+  while (!positive_definite) {
+    X_int <- simulate_sample(n_obs, m_type, n_item, r_factor, w_lambda, t_type)
+    o <- polychoric(X_int, smooth = FALSE)
+    positive_definite <- all(eig(o$rho) >= 0)
+  }
 
   # ----------------------------------------------------------------------------
   # Prepare sample data
@@ -92,8 +97,7 @@ results <- foreach(
   colnames(results_DV)  <- get_DV_names()
   results_DV["n_items"] <- n_items
 
-  o <- polychoric(X_int, smooth = TRUE)
-  X_tau <- as.matrix(o$tau)
+  X_tau    <- as.matrix(o$tau)
 
   X_rf     <- o$rho
   X_rr     <- reduce_pafa_smc(X_rf)
@@ -117,18 +121,13 @@ results <- foreach(
 
   # PA-PCA: make 100 internal datasets
   for (i in 1:PA_loops) {
-    PA_float[[i]] <- rmvn(n_obs, rep(0, n_items), diag(1, n_items))
-  }
-
-  # Quantize
-  for (i in 1:PA_loops) {
-    PA_int[[i]] <- tau_mesh(PA_float[[i]], X_tau)
-  }
-
-  # PA internal polychoric correlations
-  for (i in 1:PA_loops) {
-    o <- polychoric(PA_int[[i]], smooth = TRUE)
-    PA_rf[[i]] <- o$rho
+    positive_definite <- FALSE
+    while (!positive_definite) {
+      PA_float[[i]] <- rmvn(n_obs, rep(0, n_items), diag(1, n_items))
+      PA_int[[i]]   <- tau_mesh(PA_float[[i]], X_tau)
+      PA_rf[[i]]    <- polychoric(PA_int[[i]], smooth = FALSE)$rho
+      positive_definite <- all(eig(PA_rf[[i]]) >= 0)
+    }
   }
 
   # PA-PAF: get SMC-reduced internal datasets
@@ -198,17 +197,14 @@ results <- foreach(
       # RPA-PCA: make 100 internal datasets
       set.seed(idx_trial + 3 + k)
       for (i in 1:PA_loops) {
-        RPA_float[[i]] <- rmvn(n_obs, rep(0, n_items), RPA_pop_rf)
-      }
-
-      # RPA internal polychoric correlations
-      for (i in 1:PA_loops) {
-        RPA_int[[i]] <- tau_mesh(RPA_float[[i]], X_tau)
-        RPA_rf[[i]]  <- polychoric(RPA_int[[i]], smooth = TRUE)[[1]]
-        while (dim(RPA_rf[[i]])[1] != n_items) {
+        positive_definite <- FALSE
+        while (!positive_definite) {
           RPA_float[[i]] <- rmvn(n_obs, rep(0, n_items), RPA_pop_rf)
           RPA_int[[i]]   <- tau_mesh(RPA_float[[i]], X_tau)
-          RPA_rf[[i]]    <- polychoric(RPA_int[[i]], smooth = TRUE)[[1]]
+          RPA_rf[[i]]    <- polychoric(RPA_int[[i]], smooth = FALSE)$rho
+          positive_definite <-
+            all(eig(RPA_rf[[i]]) >= 0) &
+            dim(RPA_rf[[i]])[1] == n_items
         }
       }
 
